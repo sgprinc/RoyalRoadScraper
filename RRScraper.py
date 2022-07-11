@@ -1,4 +1,5 @@
 import argparse
+import re
 import requests
 import os
 import time
@@ -11,6 +12,14 @@ overwriteExisting = False
 useTemplate = True
 scrapeDelay = 1
 
+
+def parseRange(arg):
+    valid = re.match(r'(\d+)-(\d+)$', arg)
+    if not valid:
+        raise argparse.ArgumentTypeError("'" + arg + "' is not a valid range of number (i.e. '1-101')")
+    start = valid.group(1)
+    end = valid.group(2)
+    return (int(start), int(end))
 
 def useChapterTemplate(chapterData, chapterHTML):
     # Use a template to wrap the raw chapter content HTML
@@ -33,7 +42,12 @@ def fetchChapterList(novelName, novelURL):
     
     startTime = time.time()
     chapterList = list()
-    for row in chapterTable.findAll("tr")[1:]:                  # Iterate over the table rows and extract the data
+    rows = chapterTable.findAll("tr")
+    
+    rangeStart = (1 + args.range[0] - 1) if args.range else 1   # Exclude first header row
+    rangeEnd = min(args.range[1] + 1, len(rows)) if args.range else len(rows)
+
+    for row in rows[rangeStart:rangeEnd]:                       # Iterate over the table rows and extract the data
         chapterData = {}        
         chapterData["name"] = row.find("td").find("a").contents[0].strip()        
         chapterData["link"] = row.find("td").find("a")["href"]
@@ -48,7 +62,7 @@ def fetchChapterList(novelName, novelURL):
 def prepareOutputFolder():
     # Ensure there is an output folder to store the chapters to
     outputDir = outputBaseDir + (args.out or args.name)
-    if not os.path.exists(outputDir):                    # Ensure the output directory exists
+    if not os.path.exists(outputDir):                           # Ensure the output directory exists
         os.makedirs(outputDir)
     
     if args.verbose:
@@ -85,6 +99,7 @@ if __name__ == "__main__":
     optional = parser.add_argument_group('Optional Arguments')
     required.add_argument("-n", "--name", help="Novel's name", required=True)
     required.add_argument("-l", "--link", help="Link to the novel's index", required=True)
+    optional.add_argument('-r", "--range', dest="range", help="Range of chapters to scrape", type=parseRange)
     optional.add_argument("-o", "--out", help="Output directory")
     optional.add_argument("-v", "--verbose", help="Execute in verbose mode", action="store_true")
     args = parser.parse_args()
